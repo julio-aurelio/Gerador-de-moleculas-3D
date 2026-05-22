@@ -9,6 +9,7 @@ from datetime import datetime, timedelta
 from urllib.parse import quote
 import sys
 import os
+from collections import defaultdict
 
 # Adiciona o diretório pai ao path para importar os módulos
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -112,6 +113,113 @@ class DetectorTipoBusca:
 # API PUBCHEM
 # ============================================
 class PubChemAPI:
+    
+    @staticmethod
+    def validar_ligacoes(atoms, bonds):
+        """Valida e corrige ligações químicas (evita H com múltiplas ligações)"""
+        if not bonds or len(bonds) == 0:
+            return bonds
+        
+        # Contar ligações por átomo
+        bond_count = defaultdict(int)
+        for bond in bonds:
+            bond_count[bond['atom1']] += 1
+            bond_count[bond['atom2']] += 1
+        
+        # Valências máximas por elemento
+        valencias = {
+            'H': 1, 'C': 4, 'N': 3, 'O': 2, 'F': 1, 'Cl': 1,
+            'Br': 1, 'I': 1, 'S': 6, 'P': 5, 'B': 3, 'Si': 4,
+            'Na': 1, 'Mg': 2, 'Ca': 2, 'K': 1, 'Fe': 6, 'Cu': 4,
+            'Zn': 2, 'Ag': 1, 'Au': 3, 'Hg': 2, 'Pb': 4
+        }
+        
+        # Identificar ligações problemáticas
+        bonds_to_remove = set()
+        
+        for bond in bonds:
+            atom1 = atoms[bond['atom1']]
+            atom2 = atoms[bond['atom2']]
+            
+            # Regra 1: Hidrogênio só pode ter 1 ligação
+            if atom1['element'] == 'H' and bond_count[bond['atom1']] > 1:
+                bonds_to_remove.add((min(bond['atom1'], bond['atom2']), 
+                                    max(bond['atom1'], bond['atom2'])))
+                print(f"⚠️ Removendo ligação excessiva do H{atom1['element']}")
+            
+            if atom2['element'] == 'H' and bond_count[bond['atom2']] > 1:
+                bonds_to_remove.add((min(bond['atom1'], bond['atom2']), 
+                                    max(bond['atom1'], bond['atom2'])))
+                print(f"⚠️ Removendo ligação excessiva do H{atom2['element']}")
+            
+            # Regra 2: Verificar valência máxima
+            val_max1 = valencias.get(atom1['element'], 4)
+            val_max2 = valencias.get(atom2['element'], 4)
+            
+            if bond_count[bond['atom1']] > val_max1:
+                bonds_to_remove.add((min(bond['atom1'], bond['atom2']), 
+                                    max(bond['atom1'], bond['atom2'])))
+                print(f"⚠️ Valência excedida para {atom1['element']}")
+            
+            if bond_count[bond['atom2']] > val_max2:
+                bonds_to_remove.add((min(bond['atom1'], bond['atom2']), 
+                                    max(bond['atom1'], bond['atom2'])))
+                print(f"⚠️ Valência excedida para {atom2['element']}")
+        
+        # Filtrar ligações válidas
+        bonds_validos = []
+        for bond in bonds:
+            key = (min(bond['atom1'], bond['atom2']), max(bond['atom1'], bond['atom2']))
+            if key not in bonds_to_remove:
+                bonds_validos.append(bond)
+        
+        if len(bonds_to_remove) > 0:
+            print(f"✅ Removidas {len(bonds_to_remove)} ligações inválidas")
+        
+        return bonds_validos
+    
+    @staticmethod
+    def auto_bonds(atoms):
+        """Gera ligações baseado em distância atômica (valores otimizados)"""
+        bonds = []
+        
+        # Raios covalentes aproximados (Angstroms)
+        raios = {
+            'H': 0.37, 'C': 0.77, 'N': 0.75, 'O': 0.73, 'F': 0.71,
+            'P': 1.06, 'S': 1.02, 'Cl': 0.99, 'Br': 1.14, 'I': 1.33,
+            'Na': 1.54, 'Mg': 1.30, 'Ca': 1.74, 'Fe': 1.25, 'Cu': 1.28,
+            'Zn': 1.22, 'Ag': 1.53, 'Au': 1.44, 'Hg': 1.49, 'Pb': 1.54
+        }
+        
+        for i in range(len(atoms)):
+            for j in range(i + 1, len(atoms)):
+                dx = atoms[i]['x'] - atoms[j]['x']
+                dy = atoms[i]['y'] - atoms[j]['y']
+                dz = atoms[i]['z'] - atoms[j]['z']
+                dist = math.sqrt(dx*dx + dy*dy + dz*dz)
+                
+                # Calcular distância máxima esperada baseada nos raios
+                raio_i = raios.get(atoms[i]['element'], 0.8)
+                raio_j = raios.get(atoms[j]['element'], 0.8)
+                max_dist = (raio_i + raio_j) * 1.4  # 40% de margem
+                min_dist = 0.3  # Distância mínima para evitar falsas ligações
+                
+                if min_dist < dist < max_dist:
+                    # Determinar tipo baseado na distância
+                    if dist < (raio_i + raio_j) * 1.1:
+                        bond_type = 1  # Simples
+                    elif dist < (raio_i + raio_j) * 1.2:
+                        bond_type = 2  # Dupla
+                    else:
+                        bond_type = 1  # Simples
+                    
+                    bonds.append({'atom1': i, 'atom2': j, 'type': bond_type})
+        
+        # Validar ligações geradas automaticamente
+        bonds = PubChemAPI.validar_ligacoes(atoms, bonds)
+        
+        return bonds
+    
     @staticmethod
     def buscar_por_formula(formula):
         formula = formula.strip()
@@ -215,6 +323,7 @@ class PubChemAPI:
         
         atom_count, bond_count, start_line = 0, 0, 0
         
+        # Procurar a linha de contagem
         for i in range(min(100, len(lines))):
             line = lines[i]
             if len(line) >= 6 and line[0:3].strip().isdigit():
@@ -229,10 +338,15 @@ class PubChemAPI:
         if atom_count == 0 or atom_count > 5000:
             return None
         
+        # Pular linhas vazias
         while start_line < len(lines) and len(lines[start_line].strip()) < 5:
             start_line += 1
         
+        # Parse dos átomos
         atoms = []
+        atom_index_map = {}  # Mapear índice do SDF para índice da lista
+        current_idx = 0
+        
         for i in range(start_line, min(start_line + atom_count, len(lines))):
             line = lines[i]
             if len(line) >= 34:
@@ -241,33 +355,75 @@ class PubChemAPI:
                     y = float(line[10:20].strip())
                     z = float(line[20:30].strip())
                     element = line[31:34].strip()
+                    
+                    # Extrair elemento químico (ignorar números e caracteres especiais)
                     element_match = re.match(r'([A-Z][a-z]?)', element)
                     if element_match:
                         element = element_match.group(1)
-                    if element and element[0].isalpha():
-                        atoms.append({'element': element, 'x': x, 'y': y, 'z': z})
-                except:
+                    
+                    # Filtrar elementos válidos
+                    if element and element[0].isalpha() and len(element) <= 2:
+                        atom_index_map[current_idx] = len(atoms)
+                        atoms.append({
+                            'element': element, 
+                            'x': float(x), 
+                            'y': float(y), 
+                            'z': float(z)
+                        })
+                    current_idx += 1
+                except (ValueError, IndexError) as e:
+                    print(f"Erro ao parsear átomo: {e}")
+                    current_idx += 1
                     continue
         
         if len(atoms) == 0:
+            print("Nenhum átomo válido encontrado no SDF")
             return None
         
+        # Parse das ligações
         bonds = []
         bond_start = start_line + atom_count
+        
         for i in range(bond_start, min(bond_start + bond_count, len(lines))):
             line = lines[i]
             if len(line) >= 9:
                 try:
-                    a1 = int(line[0:3].strip()) - 1
-                    a2 = int(line[3:6].strip()) - 1
+                    a1_original = int(line[0:3].strip()) - 1  # índices originais (1-based)
+                    a2_original = int(line[3:6].strip()) - 1
                     bond_type = int(line[6:9].strip())
-                    if 0 <= a1 < len(atoms) and 0 <= a2 < len(atoms):
-                        bonds.append({'atom1': a1, 'atom2': a2, 'type': bond_type})
-                except:
+                    
+                    # Mapear para índices atuais
+                    if a1_original in atom_index_map and a2_original in atom_index_map:
+                        a1 = atom_index_map[a1_original]
+                        a2 = atom_index_map[a2_original]
+                        
+                        # Corrigir tipo de ligação (SDF às vezes tem 4=aromática, etc)
+                        if bond_type == 4:
+                            bond_type = 1  # Aromática trata como simples
+                        elif bond_type > 3:
+                            bond_type = 1
+                        
+                        if 0 <= a1 < len(atoms) and 0 <= a2 < len(atoms):
+                            # Evitar duplicatas
+                            if not any(b['atom1'] == a2 and b['atom2'] == a1 for b in bonds):
+                                bonds.append({
+                                    'atom1': a1, 
+                                    'atom2': a2, 
+                                    'type': bond_type
+                                })
+                except (ValueError, IndexError) as e:
+                    print(f"Erro ao parsear ligação: {e}")
                     continue
         
-        if len(bonds) == 0 and len(atoms) > 1:
+        # IMPORTANTE: Validar ligações antes de retornar
+        if bonds:
+            print(f"🔗 {len(bonds)} ligações encontradas no SDF, validando...")
+            bonds = PubChemAPI.validar_ligacoes(atoms, bonds)
+            print(f"✅ {len(bonds)} ligações válidas após validação")
+        elif len(atoms) > 1:
+            print("⚠️ Nenhuma ligação encontrada, gerando automaticamente...")
             bonds = PubChemAPI.auto_bonds(atoms)
+            print(f"✅ {len(bonds)} ligações geradas automaticamente")
         
         return {
             'atoms': atoms,
@@ -275,19 +431,6 @@ class PubChemAPI:
             'atom_count': len(atoms),
             'bond_count': len(bonds)
         }
-    
-    @staticmethod
-    def auto_bonds(atoms):
-        bonds = []
-        for i in range(len(atoms)):
-            for j in range(i + 1, len(atoms)):
-                dx = atoms[i]['x'] - atoms[j]['x']
-                dy = atoms[i]['y'] - atoms[j]['y']
-                dz = atoms[i]['z'] - atoms[j]['z']
-                dist = math.sqrt(dx*dx + dy*dy + dz*dz)
-                if dist < 2.0:
-                    bonds.append({'atom1': i, 'atom2': j, 'type': 1})
-        return bonds
 
 # ============================================
 # ROTAS DA API
@@ -309,6 +452,11 @@ def get_molecule(query):
     elapsed = time.time() - start_time
     
     if resultado:
+        # Log para debug
+        print(f"✅ Molécula encontrada: {query}")
+        print(f"   - Átomos: {resultado['atom_count']}")
+        print(f"   - Ligações: {resultado['bond_count']}")
+        
         return jsonify({
             'success': True,
             'meta': {
@@ -319,6 +467,7 @@ def get_molecule(query):
             'data': resultado
         })
     else:
+        print(f"❌ Molécula não encontrada: {query}")
         return jsonify({
             'success': False,
             'error': f'Não foi possível encontrar: "{query}"'
@@ -347,4 +496,4 @@ def get_by_cid(cid):
 app = app
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(debug=True, host='0.0.0.0', port=5000)
