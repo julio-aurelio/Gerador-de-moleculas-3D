@@ -59,6 +59,11 @@
         .bond-visual {
             transition: all 0.2s ease;
         }
+        /* Celular: painel vira gaveta embaixo, legendas recolhidas */
+        @media (max-width: 767px) {
+            .info-panel { display: none; }
+            #painel:not(.aberto) .extra { display: none; }
+        }
     </style>
 </head>
 <body>
@@ -68,29 +73,30 @@
     </div>
 
     <!-- Painel lateral -->
-    <div class="fixed top-4 right-4 z-20 w-96 bg-white/95 backdrop-blur-sm rounded-2xl shadow-2xl border border-gray-200 p-5 max-h-[95vh] overflow-y-auto">
-        <div class="flex items-center gap-3 mb-5">
-            <div class="w-12 h-12 bg-gradient-to-br from-purple-600 to-blue-600 rounded-full flex items-center justify-center shadow-lg">
+    <div id="painel" class="fixed inset-x-2 bottom-2 max-h-[55vh] p-4 md:inset-x-auto md:bottom-auto md:top-4 md:right-4 md:w-96 md:max-h-[95vh] md:p-5 z-20 bg-white/95 backdrop-blur-sm rounded-2xl shadow-2xl border border-gray-200 overflow-y-auto">
+        <div class="flex items-center gap-3 mb-3 md:mb-5">
+            <div class="w-10 h-10 md:w-12 md:h-12 shrink-0 bg-gradient-to-br from-purple-600 to-blue-600 rounded-full flex items-center justify-center shadow-lg">
                 <span class="text-white text-2xl">⚛️</span>
             </div>
             <div>
                 <h1 class="text-xl font-bold text-gray-800">Visualizador 3D</h1>
                 <p class="text-xs text-gray-500">PubChem API | Cores CPK | Ligações coloridas</p>
             </div>
+            <button id="togglePainel" class="md:hidden ml-auto text-xs px-3 py-1.5 bg-gray-100 rounded-full text-gray-600">Legendas ▾</button>
         </div>
 
         <!-- Busca -->
-        <div class="mb-5">
+        <div class="mb-3 md:mb-5">
             <label class="block text-sm font-semibold text-gray-700 mb-2">
                 🔍 Buscar molécula
             </label>
             <div class="flex gap-2">
                 <input type="text" id="queryInput" 
-                    class="flex-1 px-4 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none text-sm"
+                    class="flex-1 min-w-0 px-3 md:px-4 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none text-base md:text-sm"
                     placeholder="Ex: C8H18, butano, H2O, benzeno, octano, água"
                     value="C8H18">
                 <button id="searchBtn" 
-                    class="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white px-5 py-2.5 rounded-xl transition-all duration-200 flex items-center gap-2 shadow-md">
+                    class="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white px-4 md:px-5 py-2.5 rounded-xl shrink-0 transition-all duration-200 flex items-center gap-2 shadow-md">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
                     </svg>
@@ -101,7 +107,7 @@
         </div>
 
         <!-- Status -->
-        <div id="status" class="mb-5 p-3 bg-gray-100 rounded-xl text-sm">
+        <div id="status" class="mb-3 md:mb-5 p-3 bg-gray-100 rounded-xl text-sm">
             <div class="flex items-center gap-2 text-gray-600">
                 <div class="w-2 h-2 bg-green-500 rounded-full"></div>
                 <span>✅ Pronto para buscar</span>
@@ -109,7 +115,7 @@
         </div>
 
         <!-- Info da molécula -->
-        <div id="infoMolecula" class="hidden mb-5 p-4 bg-gradient-to-r from-purple-50 to-blue-50 rounded-xl border border-purple-200">
+        <div id="infoMolecula" class="hidden mb-3 md:mb-5 p-3 md:p-4 bg-gradient-to-r from-purple-50 to-blue-50 rounded-xl border border-purple-200">
             <div class="text-xs font-semibold text-purple-700 mb-2 flex items-center gap-1">
                 <span>🔬</span> MOLÉCULA ATUAL
             </div>
@@ -120,7 +126,7 @@
         </div>
 
         <!-- Legenda de Cores (expandida) -->
-        <div class="pt-4 border-t border-gray-200">
+        <div class="extra pt-4 border-t border-gray-200">
             <div class="text-xs font-semibold text-gray-600 mb-2 flex items-center gap-2">
                 <span>🎨</span> Cores dos Átomos (Padrão CPK)
                 <span class="text-[10px] text-gray-400">passe o mouse para ver o nome</span>
@@ -131,7 +137,7 @@
         </div>
 
         <!-- Legenda de Ligações -->
-        <div class="pt-3 mt-2 border-t border-gray-200">
+        <div class="extra pt-3 mt-2 border-t border-gray-200">
             <div class="text-xs font-semibold text-gray-600 mb-2 flex items-center gap-2">
                 <span>🔗</span> Tipos de Ligações
             </div>
@@ -174,7 +180,7 @@
         </div>
         
         <!-- Badge de versão -->
-        <div class="mt-4 text-center text-[10px] text-gray-400">
+        <div class="extra mt-4 text-center text-[10px] text-gray-400">
             🔬 Powered by PubChem API | Visualização 3D com Three.js
         </div>
     </div>
@@ -559,6 +565,11 @@
         });
 
         // Controles
+        document.getElementById('togglePainel').addEventListener('click', (e) => {
+            const aberto = document.getElementById('painel').classList.toggle('aberto');
+            e.target.textContent = aberto ? 'Fechar ▴' : 'Legendas ▾';
+        });
+
         document.getElementById('toggleBonds').addEventListener('click', () => {
             highlightBonds = !highlightBonds;
             const btn = document.getElementById('toggleBonds');
@@ -701,4 +712,4 @@
         }, 500);
     </script>
 </body>
-</html>
+</html>
