@@ -63,6 +63,7 @@
         @media (max-width: 767px) {
             .info-panel { display: none; }
             #painel:not(.aberto) .extra { display: none; }
+            #painel.oculto { display: none; }
         }
     </style>
 </head>
@@ -71,6 +72,9 @@
     <div class="info-panel">
         🖱️ Clique e arraste para rotacionar | Scroll para zoom | Botão direito para mover
     </div>
+
+    <!-- Botão mostrar/ocultar menu (só celular) -->
+    <button id="btnMenu" class="md:hidden fixed top-3 right-3 z-30 px-4 py-2 rounded-full bg-gradient-to-r from-purple-600 to-blue-600 text-white text-sm font-semibold shadow-lg">✕ Ocultar menu</button>
 
     <!-- Painel lateral -->
     <div id="painel" class="fixed inset-x-2 bottom-2 max-h-[55vh] p-4 md:inset-x-auto md:bottom-auto md:top-4 md:right-4 md:w-96 md:max-h-[95vh] md:p-5 z-20 bg-white/95 backdrop-blur-sm rounded-2xl shadow-2xl border border-gray-200 overflow-y-auto">
@@ -565,6 +569,14 @@
         });
 
         // Controles
+        const painel = document.getElementById('painel');
+        const btnMenu = document.getElementById('btnMenu');
+        function mostrarMenu(mostrar) {
+            painel.classList.toggle('oculto', !mostrar);
+            btnMenu.textContent = mostrar ? '✕ Ocultar menu' : '☰ Menu';
+        }
+        btnMenu.addEventListener('click', () => mostrarMenu(painel.classList.contains('oculto')));
+
         document.getElementById('togglePainel').addEventListener('click', (e) => {
             const aberto = document.getElementById('painel').classList.toggle('aberto');
             e.target.textContent = aberto ? 'Fechar ▴' : 'Legendas ▾';
